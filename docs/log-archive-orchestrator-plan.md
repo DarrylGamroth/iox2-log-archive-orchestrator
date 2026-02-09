@@ -91,10 +91,15 @@ The key words `MUST`, `SHOULD`, `MAY` are to be interpreted as described in RFC 
 - [x] Phase 2 complete
 - [x] Phase 3 complete
 - [x] Phase 4 complete
-- [ ] Phase 5 complete
+- [x] Phase 5 complete
 
 ## Open Decisions
 - `OD-001`: Process ownership model: orchestrator-daemon loop vs one-shot CLI + external supervisor.
 - `OD-002`: Should state be single file or split (`desired.toml` + runtime watermark file)?
 - `OD-003`: Worker restart policy defaults (immediate retry vs backoff).
 - `OD-004`: Whether orchestrator control plane should be exposed as request/response service in V1.
+
+## Phase 5 Closure
+- Operational runbook is documented in `README.md` (`Operational Runbook` section).
+- Requirement traceability is documented in `docs/log-archive-orchestrator-traceability.md`.
+- All `ORCH-001..ORCH-010` requirements are mapped to implementation and verification evidence.

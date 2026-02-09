@@ -129,11 +129,23 @@ pub fn run(cli: Cli) -> Result<(), CommandError> {
     };
 
     match action {
-        OrchestratorAction::Enable(options) => enable(&state_path, &cli.recorder_bin, &control, options, cli.format),
-        OrchestratorAction::Disable(options) => disable(&state_path, &control, &options.service, cli.format),
-        OrchestratorAction::Status(options) => status(&state_path, &control, &options.service, cli.format),
+        OrchestratorAction::Enable(options) => enable(
+            &state_path,
+            &cli.recorder_bin,
+            &control,
+            options,
+            cli.format,
+        ),
+        OrchestratorAction::Disable(options) => {
+            disable(&state_path, &control, &options.service, cli.format)
+        }
+        OrchestratorAction::Status(options) => {
+            status(&state_path, &control, &options.service, cli.format)
+        }
         OrchestratorAction::List => list(&state_path, &control, cli.format),
-        OrchestratorAction::Reconcile => reconcile(&state_path, &cli.recorder_bin, &control, cli.format),
+        OrchestratorAction::Reconcile => {
+            reconcile(&state_path, &cli.recorder_bin, &control, cli.format)
+        }
     }
 }
 
@@ -241,7 +253,11 @@ fn status(
 
     let state = load_state(state_path)?;
     let configured = state.services.contains_key(service);
-    let enabled = state.services.get(service).map(|s| s.enabled).unwrap_or(false);
+    let enabled = state
+        .services
+        .get(service)
+        .map(|s| s.enabled)
+        .unwrap_or(false);
     let live = control.status(service).map_err(CommandError::Internal)?;
 
     print(

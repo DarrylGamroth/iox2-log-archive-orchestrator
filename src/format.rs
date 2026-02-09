@@ -26,7 +26,9 @@ impl Format {
     pub fn as_string(self, value: impl Serialize) -> anyhow::Result<String> {
         match self {
             Format::RON => ron::to_string(&value).context("failed to serialize RON"),
-            Format::JSON => serde_json::to_string_pretty(&value).context("failed to serialize JSON"),
+            Format::JSON => {
+                serde_json::to_string_pretty(&value).context("failed to serialize JSON")
+            }
             Format::YAML => serde_yaml::to_string(&value).context("failed to serialize YAML"),
         }
     }

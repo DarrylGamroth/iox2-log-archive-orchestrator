@@ -38,7 +38,11 @@ pub fn recorder_args(service: &str, spec: &ServiceSpec) -> Vec<String> {
     ]
 }
 
-pub fn spawn_recorder(recorder_bin: &str, service: &str, spec: &ServiceSpec) -> anyhow::Result<u32> {
+pub fn spawn_recorder(
+    recorder_bin: &str,
+    service: &str,
+    spec: &ServiceSpec,
+) -> anyhow::Result<u32> {
     let args = recorder_args(service, spec);
     let child = Command::new(recorder_bin)
         .args(args)
@@ -46,7 +50,12 @@ pub fn spawn_recorder(recorder_bin: &str, service: &str, spec: &ServiceSpec) -> 
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .with_context(|| format!("failed to spawn '{}' for service '{}'", recorder_bin, service))?;
+        .with_context(|| {
+            format!(
+                "failed to spawn '{}' for service '{}'",
+                recorder_bin, service
+            )
+        })?;
 
     Ok(child.id())
 }

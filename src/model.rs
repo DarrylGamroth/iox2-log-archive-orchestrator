@@ -89,7 +89,10 @@ impl ServiceSpec {
             anyhow::bail!("storage_path for service '{}' must not be empty", service)
         }
         if self.metadata_log_path.trim().is_empty() {
-            anyhow::bail!("metadata_log_path for service '{}' must not be empty", service)
+            anyhow::bail!(
+                "metadata_log_path for service '{}' must not be empty",
+                service
+            )
         }
         if self.cycle_time_ms == 0 {
             anyhow::bail!("cycle_time_ms for service '{}' must be > 0", service)

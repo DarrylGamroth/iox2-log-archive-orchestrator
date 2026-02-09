@@ -40,10 +40,18 @@ pub fn save(path: &Path, state: &DesiredState) -> anyhow::Result<()> {
     let encoded = toml::to_string_pretty(state).context("failed to encode desired-state TOML")?;
     let tmp_path = path.with_extension("tmp");
 
-    fs::write(&tmp_path, encoded)
-        .with_context(|| format!("failed to write temp desired-state file {}", tmp_path.display()))?;
-    fs::rename(&tmp_path, path)
-        .with_context(|| format!("failed to atomically replace desired-state file {}", path.display()))?;
+    fs::write(&tmp_path, encoded).with_context(|| {
+        format!(
+            "failed to write temp desired-state file {}",
+            tmp_path.display()
+        )
+    })?;
+    fs::rename(&tmp_path, path).with_context(|| {
+        format!(
+            "failed to atomically replace desired-state file {}",
+            path.display()
+        )
+    })?;
 
     Ok(())
 }

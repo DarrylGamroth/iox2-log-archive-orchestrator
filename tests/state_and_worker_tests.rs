@@ -10,7 +10,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use iceoryx2_userland_log_archive_orchestrator::model::{DesiredState, PersistenceMode, RecorderProfile, ServiceSpec};
+use iceoryx2_userland_log_archive_orchestrator::model::{
+    DesiredState, PersistenceMode, RecorderProfile, ServiceSpec,
+};
 use iceoryx2_userland_log_archive_orchestrator::state::{load_or_default, save};
 use iceoryx2_userland_log_archive_orchestrator::worker::recorder_args;
 

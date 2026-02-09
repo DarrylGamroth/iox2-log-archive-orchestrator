@@ -67,3 +67,37 @@ Schema highlights:
 - V1 is single-host and process-based.
 - Liveness is intentionally derived from recorder control responses, not pid-only checks.
 - Pattern-specific orchestration beyond pub/sub recorder workers is deferred.
+
+## Operational Runbook
+### Recommended Runtime Model
+- Run orchestrator as a one-shot control CLI under an external supervisor or service manager.
+- Use `reconcile` on startup/restart to converge desired state to live recorder workers.
+
+### Restart Semantics
+- Desired state survives restart in `state.toml`.
+- After orchestrator restart, no implicit worker assumptions are made.
+- Operator or supervisor runs `reconcile` to:
+- start enabled-but-missing services,
+- stop disabled-but-live services,
+- leave enabled-and-live services untouched.
+
+### Failure Semantics
+- `InvalidInput` failures return exit code `2` (invalid command/arguments/state request).
+- `NotAvailable` failures return exit code `3` (external dependency unavailable).
+- `Internal` failures return exit code `1` (unexpected/runtime execution failure).
+
+Common operational cases:
+- `iox2-log-control` unavailable:
+- `status` reports service not available; `reconcile` treats enabled services as missing and attempts spawn.
+- Recorder spawn failure:
+- command fails with `Internal`; no desired-state rollback is performed.
+- Malformed/unsupported state file:
+- load fails; command exits with explicit serialized error.
+
+### Idempotency Rules
+- `enable` with identical service spec is a no-op update (`changed=false`).
+- `disable` on an already-disabled service is a no-op update (`changed=false`).
+- `reconcile` is safe to run repeatedly.
+
+## Traceability
+- `docs/log-archive-orchestrator-traceability.md`
