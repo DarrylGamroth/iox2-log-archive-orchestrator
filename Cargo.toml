@@ -1,0 +1,23 @@
+[package]
+name = "iceoryx2-userland-log-archive-orchestrator"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83"
+description = "Multi-stream recorder orchestration overlay for iceoryx2 log-archive"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DarrylGamroth/iceoryx2-log-archive-orchestrator"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "std"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_yaml = "0.9"
+ron = "0.11"
+toml = { version = "0.9.8", default-features = false, features = ["serde", "parse", "display"] }
+dirs = "5.0"
+better-panic = "0.3.0"
+human-panic = "2.0.2"
+
+[dev-dependencies]
+tempfile = "3.12.0"
