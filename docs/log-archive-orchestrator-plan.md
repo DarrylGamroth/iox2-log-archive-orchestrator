@@ -50,6 +50,13 @@ The key words `MUST`, `SHOULD`, `MAY` are to be interpreted as described in RFC 
 - `cli`: operator surface as daemon client plus `serve`.
 - `config`: merged settings with precedence `CLI > env > file > defaults`.
 
+### Runtime Pattern
+1. `serve` is the long-running authority for desired-vs-actual convergence.
+2. CLI invocations are request/response control clients to `serve`.
+3. `serve` persists desired intent in `state.toml`.
+4. `serve` reconciles by spawning/stopping `iox2-log-recorder` workers.
+5. `serve` uses `iox2-log-control` for worker liveness/status/stop protocol.
+
 ## Implementation Phases
 ### Phase 0: Contract + Data Model
 - Define persisted config schema and command semantics.

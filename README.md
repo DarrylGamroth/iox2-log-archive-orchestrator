@@ -8,6 +8,18 @@
 - Desired state is a durable TOML file.
 - Runtime reconcile is periodic and command-triggered.
 
+## Operating Pattern
+1. Start `iox2-log-orchestrator serve` as the long-running daemon.
+2. Send admin commands (`enable`, `disable`, `pause`, `resume`, `start`, `stop`, `status`, `list`, `reconcile`) with `iox2-log-orchestrator` CLI.
+3. The daemon persists desired intent in `state.toml` (`--state-path`).
+4. The daemon reconciles desired state to runtime by spawning/stopping `iox2-log-recorder` workers.
+5. Worker liveness and stop operations are mediated through `iox2-log-control`.
+
+Control flow:
+- `iox2-log-orchestrator` CLI (client) -> orchestrator control service -> orchestrator daemon
+- orchestrator daemon -> `iox2-log-recorder` worker processes
+- orchestrator daemon -> `iox2-log-control` (status/stop against workers)
+
 ## Commands
 Binary: `iox2-log-orchestrator`
 
