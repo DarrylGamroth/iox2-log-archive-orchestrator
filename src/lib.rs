@@ -11,8 +11,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 pub mod cli;
+pub mod client;
 pub mod command;
+pub mod config;
 pub mod control;
+pub mod control_api;
+pub mod daemon;
+pub mod error;
 pub mod format;
 pub mod model;
 pub mod state;

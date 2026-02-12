@@ -36,23 +36,54 @@ pub struct Cli {
     #[clap(long, global = true, help = "Path to desired-state TOML file")]
     pub state_path: Option<PathBuf>,
 
-    #[clap(long, global = true, default_value = "iox2-log-recorder")]
-    pub recorder_bin: String,
+    #[clap(long, global = true, help = "Path to orchestrator config TOML file")]
+    pub config_path: Option<PathBuf>,
 
-    #[clap(long, global = true, default_value = "iox2-log-control")]
-    pub control_bin: String,
+    #[clap(long, global = true, help = "iceoryx2 control service name")]
+    pub control_service: Option<String>,
 
-    #[clap(long, global = true, default_value = "2000")]
-    pub control_timeout_ms: u64,
+    #[clap(long, global = true)]
+    pub recorder_bin: Option<String>,
+
+    #[clap(long, global = true)]
+    pub control_bin: Option<String>,
+
+    #[clap(long, global = true)]
+    pub control_timeout_ms: Option<u64>,
+
+    #[clap(long, global = true)]
+    pub reconcile_interval_ms: Option<u64>,
+
+    #[clap(long, global = true)]
+    pub backoff_initial_ms: Option<u64>,
+
+    #[clap(long, global = true)]
+    pub backoff_factor: Option<f64>,
+
+    #[clap(long, global = true)]
+    pub backoff_max_ms: Option<u64>,
+
+    #[clap(long, global = true)]
+    pub backoff_jitter_percent: Option<u8>,
+
+    #[clap(long, global = true)]
+    pub backoff_max_window_ms: Option<u64>,
 }
 
 #[derive(Subcommand)]
 pub enum OrchestratorAction {
+    Serve,
     Enable(EnableOptions),
     Disable(ServiceOptions),
+    Pause(ServiceOptions),
+    Resume(ServiceOptions),
+    Start(ServiceOptions),
+    Stop(ServiceOptions),
     Status(ServiceOptions),
     List,
     Reconcile,
+    DaemonStatus,
+    Shutdown,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -65,6 +96,9 @@ pub struct ServiceOptions {
 pub struct EnableOptions {
     #[clap(long)]
     pub service: String,
+
+    #[clap(long, default_value = "default")]
+    pub instance: String,
 
     #[clap(long)]
     pub storage_path: String,

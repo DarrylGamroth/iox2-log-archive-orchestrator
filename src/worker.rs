@@ -16,6 +16,18 @@ use anyhow::Context;
 
 use crate::model::ServiceSpec;
 
+pub trait Runner: Send + Sync + 'static {
+    fn spawn_recorder(
+        &self,
+        recorder_bin: &str,
+        service: &str,
+        spec: &ServiceSpec,
+    ) -> anyhow::Result<u32>;
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ProcessRunner;
+
 pub fn recorder_args(service: &str, spec: &ServiceSpec) -> Vec<String> {
     vec![
         "--format".to_string(),
@@ -38,26 +50,29 @@ pub fn recorder_args(service: &str, spec: &ServiceSpec) -> Vec<String> {
     ]
 }
 
-pub fn spawn_recorder(
-    recorder_bin: &str,
-    service: &str,
-    spec: &ServiceSpec,
-) -> anyhow::Result<u32> {
-    let args = recorder_args(service, spec);
-    let child = Command::new(recorder_bin)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .with_context(|| {
-            format!(
-                "failed to spawn '{}' for service '{}'",
-                recorder_bin, service
-            )
-        })?;
+impl Runner for ProcessRunner {
+    fn spawn_recorder(
+        &self,
+        recorder_bin: &str,
+        service: &str,
+        spec: &ServiceSpec,
+    ) -> anyhow::Result<u32> {
+        let args = recorder_args(service, spec);
+        let child = Command::new(recorder_bin)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .with_context(|| {
+                format!(
+                    "failed to spawn '{}' for service '{}'",
+                    recorder_bin, service
+                )
+            })?;
 
-    Ok(child.id())
+        Ok(child.id())
+    }
 }
 
 #[cfg(test)]
@@ -70,6 +85,9 @@ mod tests {
     fn recorder_args_are_deterministic() {
         let spec = ServiceSpec {
             enabled: true,
+            paused: false,
+            instance: "default".to_string(),
+            generation: 1,
             storage_path: "/tmp/storage".to_string(),
             metadata_log_path: "/tmp/metadata".to_string(),
             profile: RecorderProfile::Throughput,

@@ -26,6 +26,9 @@ fn desired_state_roundtrip_preserves_service_spec() {
         "My/Camera/Service".to_string(),
         ServiceSpec {
             enabled: true,
+            paused: false,
+            instance: "default".to_string(),
+            generation: 1,
             storage_path: "/tmp/storage".to_string(),
             metadata_log_path: "/tmp/metadata".to_string(),
             profile: RecorderProfile::Throughput,
@@ -45,6 +48,9 @@ fn desired_state_roundtrip_preserves_service_spec() {
 fn recorder_args_include_required_fields() {
     let spec = ServiceSpec {
         enabled: true,
+        paused: false,
+        instance: "default".to_string(),
+        generation: 1,
         storage_path: "/tmp/storage".to_string(),
         metadata_log_path: "/tmp/metadata".to_string(),
         profile: RecorderProfile::Balanced,

@@ -12,8 +12,10 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::process::{Command, Output};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Output};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use iceoryx2_userland_log_archive_orchestrator::model::{
     DesiredState, PersistenceMode, RecorderProfile, ServiceSpec,
@@ -47,6 +49,9 @@ if [[ -z "$service" ]]; then
   exit 2
 fi
 mock_dir="${MOCK_DIR:?}"
+if [[ -f "${mock_dir}/fail_service" ]] && [[ "$(cat "${mock_dir}/fail_service")" == "$service" ]]; then
+  exit 1
+fi
 touch "${mock_dir}/live_${service}"
 count_file="${mock_dir}/spawn_count_${service}"
 if [[ -f "$count_file" ]]; then
@@ -103,8 +108,66 @@ fi
     )
 }
 
+struct DaemonGuard {
+    child: Child,
+    state_path: PathBuf,
+    control_service: String,
+    recorder_bin: String,
+    control_bin: String,
+    mock_dir: PathBuf,
+}
+
+impl Drop for DaemonGuard {
+    fn drop(&mut self) {
+        let _ = run_orchestrator(
+            &self.state_path,
+            &self.control_service,
+            &self.recorder_bin,
+            &self.control_bin,
+            &self.mock_dir,
+            &["shutdown"],
+        );
+        let timeout = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < timeout {
+            if self.child.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn wait_for_daemon(
+    state_path: &Path,
+    control_service: &str,
+    recorder_bin: &str,
+    control_bin: &str,
+    mock_dir: &Path,
+    timeout: Duration,
+) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        let output = run_orchestrator(
+            state_path,
+            control_service,
+            recorder_bin,
+            control_bin,
+            mock_dir,
+            &["daemon-status"],
+        );
+        if output.status.success() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    panic!("timed out waiting for orchestrator daemon control service");
+}
+
 fn run_orchestrator(
     state_path: &Path,
+    control_service: &str,
     recorder_bin: &str,
     control_bin: &str,
     mock_dir: &Path,
@@ -117,6 +180,8 @@ fn run_orchestrator(
     .arg("json")
     .arg("--state-path")
     .arg(state_path)
+    .arg("--control-service")
+    .arg(control_service)
     .arg("--recorder-bin")
     .arg(recorder_bin)
     .arg("--control-bin")
@@ -127,18 +192,92 @@ fn run_orchestrator(
     .unwrap()
 }
 
+fn start_daemon(
+    state_path: &Path,
+    control_service: &str,
+    recorder_bin: &str,
+    control_bin: &str,
+    mock_dir: &Path,
+    extra_args: &[&str],
+) -> DaemonGuard {
+    let mut command = Command::new(env!(
+        "CARGO_BIN_EXE_iceoryx2-userland-log-archive-orchestrator"
+    ));
+    command
+        .arg("--format")
+        .arg("json")
+        .arg("--state-path")
+        .arg(state_path)
+        .arg("--control-service")
+        .arg(control_service)
+        .arg("--recorder-bin")
+        .arg(recorder_bin)
+        .arg("--control-bin")
+        .arg(control_bin)
+        .args(extra_args)
+        .arg("serve")
+        .env("MOCK_DIR", mock_dir);
+
+    let child = command.spawn().unwrap();
+    wait_for_daemon(
+        state_path,
+        control_service,
+        recorder_bin,
+        control_bin,
+        mock_dir,
+        Duration::from_secs(3),
+    );
+    DaemonGuard {
+        child,
+        state_path: state_path.to_path_buf(),
+        control_service: control_service.to_string(),
+        recorder_bin: recorder_bin.to_string(),
+        control_bin: control_bin.to_string(),
+        mock_dir: mock_dir.to_path_buf(),
+    }
+}
+
 fn parse_json_stdout(output: &Output) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn unique_control_service(test_name: &str) -> String {
+    format!(
+        "iox2/log/archive/orchestrator/test/{}/{}",
+        std::process::id(),
+        test_name
+    )
+}
+
+fn wait_for_file(path: &Path, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if path.exists() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    panic!("timed out waiting for file {}", path.display());
+}
+
 #[test]
-fn enable_and_disable_are_idempotent() {
+fn lifecycle_commands_are_idempotent_and_reconciled() {
     let dir = tempfile::tempdir().unwrap();
     let state_path = dir.path().join("state.toml");
+    let control_service = unique_control_service("lifecycle");
     let (recorder_bin, control_bin) = create_mock_bins(dir.path());
+    let _daemon = start_daemon(
+        &state_path,
+        &control_service,
+        &recorder_bin,
+        &control_bin,
+        dir.path(),
+        &["--reconcile-interval-ms", "50"],
+    );
 
     let first_enable = run_orchestrator(
         &state_path,
+        &control_service,
         &recorder_bin,
         &control_bin,
         dir.path(),
@@ -146,6 +285,8 @@ fn enable_and_disable_are_idempotent() {
             "enable",
             "--service",
             "svc_a",
+            "--instance",
+            "inst0",
             "--storage-path",
             "/tmp/storage_a",
             "--metadata-log-path",
@@ -156,10 +297,12 @@ fn enable_and_disable_are_idempotent() {
     let first_enable_json = parse_json_stdout(&first_enable);
     assert_eq!(first_enable_json["operation"], "enable");
     assert_eq!(first_enable_json["changed"], true);
-    assert!(first_enable_json["launched_pid"].as_u64().is_some());
+    assert_eq!(first_enable_json["generation"], 1);
+    assert_eq!(first_enable_json["started"], true);
 
     let second_enable = run_orchestrator(
         &state_path,
+        &control_service,
         &recorder_bin,
         &control_bin,
         dir.path(),
@@ -167,6 +310,8 @@ fn enable_and_disable_are_idempotent() {
             "enable",
             "--service",
             "svc_a",
+            "--instance",
+            "inst0",
             "--storage-path",
             "/tmp/storage_a",
             "--metadata-log-path",
@@ -176,10 +321,37 @@ fn enable_and_disable_are_idempotent() {
     assert!(second_enable.status.success(), "{second_enable:?}");
     let second_enable_json = parse_json_stdout(&second_enable);
     assert_eq!(second_enable_json["changed"], false);
-    assert!(second_enable_json["launched_pid"].is_null());
+    assert_eq!(second_enable_json["started"], false);
+
+    let pause = run_orchestrator(
+        &state_path,
+        &control_service,
+        &recorder_bin,
+        &control_bin,
+        dir.path(),
+        &["pause", "--service", "svc_a"],
+    );
+    assert!(pause.status.success(), "{pause:?}");
+    let pause_json = parse_json_stdout(&pause);
+    assert_eq!(pause_json["changed"], true);
+    assert_eq!(pause_json["stop_requested"], true);
+
+    let resume = run_orchestrator(
+        &state_path,
+        &control_service,
+        &recorder_bin,
+        &control_bin,
+        dir.path(),
+        &["resume", "--service", "svc_a"],
+    );
+    assert!(resume.status.success(), "{resume:?}");
+    let resume_json = parse_json_stdout(&resume);
+    assert_eq!(resume_json["changed"], true);
+    assert_eq!(resume_json["started"], true);
 
     let first_disable = run_orchestrator(
         &state_path,
+        &control_service,
         &recorder_bin,
         &control_bin,
         dir.path(),
@@ -187,12 +359,12 @@ fn enable_and_disable_are_idempotent() {
     );
     assert!(first_disable.status.success(), "{first_disable:?}");
     let first_disable_json = parse_json_stdout(&first_disable);
-    assert_eq!(first_disable_json["operation"], "disable");
     assert_eq!(first_disable_json["changed"], true);
     assert_eq!(first_disable_json["stop_requested"], true);
 
     let second_disable = run_orchestrator(
         &state_path,
+        &control_service,
         &recorder_bin,
         &control_bin,
         dir.path(),
@@ -205,9 +377,10 @@ fn enable_and_disable_are_idempotent() {
 }
 
 #[test]
-fn reconcile_starts_missing_enabled_and_avoids_duplicates() {
+fn periodic_reconcile_starts_enabled_service() {
     let dir = tempfile::tempdir().unwrap();
     let state_path = dir.path().join("state.toml");
+    let control_service = unique_control_service("periodic");
     let (recorder_bin, control_bin) = create_mock_bins(dir.path());
 
     let mut state = DesiredState::new();
@@ -215,6 +388,9 @@ fn reconcile_starts_missing_enabled_and_avoids_duplicates() {
         "svc_start".to_string(),
         ServiceSpec {
             enabled: true,
+            paused: false,
+            instance: "inst0".to_string(),
+            generation: 1,
             storage_path: "/tmp/storage_start".to_string(),
             metadata_log_path: "/tmp/meta_start".to_string(),
             profile: RecorderProfile::Balanced,
@@ -223,83 +399,111 @@ fn reconcile_starts_missing_enabled_and_avoids_duplicates() {
             flush_interval_ms: 100,
         },
     );
-    state.services.insert(
-        "svc_running".to_string(),
-        ServiceSpec {
-            enabled: true,
-            storage_path: "/tmp/storage_running".to_string(),
-            metadata_log_path: "/tmp/meta_running".to_string(),
-            profile: RecorderProfile::Balanced,
-            mode: PersistenceMode::Async,
-            cycle_time_ms: 10,
-            flush_interval_ms: 100,
-        },
-    );
-    state.services.insert(
-        "svc_stop".to_string(),
-        ServiceSpec {
-            enabled: false,
-            storage_path: "/tmp/storage_stop".to_string(),
-            metadata_log_path: "/tmp/meta_stop".to_string(),
-            profile: RecorderProfile::Balanced,
-            mode: PersistenceMode::Async,
-            cycle_time_ms: 10,
-            flush_interval_ms: 100,
-        },
-    );
     save(&state_path, &state).unwrap();
 
-    fs::write(dir.path().join("live_svc_running"), b"1").unwrap();
-    fs::write(dir.path().join("live_svc_stop"), b"1").unwrap();
-
-    let reconcile = run_orchestrator(
+    let _daemon = start_daemon(
         &state_path,
+        &control_service,
         &recorder_bin,
         &control_bin,
         dir.path(),
-        &["reconcile"],
+        &["--reconcile-interval-ms", "20"],
     );
-    assert!(reconcile.status.success(), "{reconcile:?}");
 
-    let reconcile_json = parse_json_stdout(&reconcile);
-    assert_eq!(reconcile_json["operation"], "reconcile");
+    wait_for_file(
+        &dir.path().join("spawn_count_svc_start"),
+        Duration::from_secs(2),
+    );
+    let spawn_count = fs::read_to_string(dir.path().join("spawn_count_svc_start")).unwrap();
+    assert_eq!(spawn_count.trim(), "1");
+}
 
-    let started = reconcile_json["started_services"].as_array().unwrap();
-    let already_running = reconcile_json["already_running_services"]
-        .as_array()
-        .unwrap();
-    let stopped = reconcile_json["stopped_services"].as_array().unwrap();
+#[test]
+fn service_enters_degraded_after_retry_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let state_path = dir.path().join("state.toml");
+    let control_service = unique_control_service("degraded");
+    let (recorder_bin, control_bin) = create_mock_bins(dir.path());
+    fs::write(dir.path().join("fail_service"), "svc_fail").unwrap();
 
-    assert_eq!(started.len(), 1);
-    assert_eq!(started[0], "svc_start");
-    assert_eq!(already_running.len(), 1);
-    assert_eq!(already_running[0], "svc_running");
-    assert_eq!(stopped.len(), 1);
-    assert_eq!(stopped[0], "svc_stop");
+    let _daemon = start_daemon(
+        &state_path,
+        &control_service,
+        &recorder_bin,
+        &control_bin,
+        dir.path(),
+        &[
+            "--reconcile-interval-ms",
+            "20",
+            "--backoff-initial-ms",
+            "10",
+            "--backoff-max-ms",
+            "10",
+            "--backoff-jitter-percent",
+            "0",
+            "--backoff-max-window-ms",
+            "100",
+        ],
+    );
 
-    let spawn_count_start = fs::read_to_string(dir.path().join("spawn_count_svc_start")).unwrap();
-    assert_eq!(spawn_count_start.trim(), "1");
-    assert!(!dir.path().join("live_svc_stop").exists());
+    let enable = run_orchestrator(
+        &state_path,
+        &control_service,
+        &recorder_bin,
+        &control_bin,
+        dir.path(),
+        &[
+            "enable",
+            "--service",
+            "svc_fail",
+            "--instance",
+            "inst0",
+            "--storage-path",
+            "/tmp/storage_fail",
+            "--metadata-log-path",
+            "/tmp/meta_fail",
+        ],
+    );
+    assert!(enable.status.success(), "{enable:?}");
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let status = run_orchestrator(
+            &state_path,
+            &control_service,
+            &recorder_bin,
+            &control_bin,
+            dir.path(),
+            &["status", "--service", "svc_fail"],
+        );
+        assert!(status.status.success(), "{status:?}");
+        let status_json = parse_json_stdout(&status);
+        assert_eq!(status_json["operation"], "status");
+        assert_eq!(status_json["configured"], true);
+        assert_eq!(status_json["enabled"], true);
+
+        let degraded = status_json["health"]["degraded"].as_bool().unwrap_or(false);
+        let attempts = status_json["health"]["restart_attempts"]
+            .as_u64()
+            .unwrap_or_default();
+        if degraded {
+            assert!(attempts > 0);
+            break;
+        }
+        if Instant::now() >= deadline {
+            panic!("service did not enter degraded state within timeout: {status_json}");
+        }
+        thread::sleep(Duration::from_millis(30));
+    }
 }
 
 #[test]
 fn missing_action_returns_deterministic_invalid_input_error() {
-    let dir = tempfile::tempdir().unwrap();
-    let state_path = dir.path().join("state.toml");
-    let (recorder_bin, control_bin) = create_mock_bins(dir.path());
-
     let output = Command::new(env!(
         "CARGO_BIN_EXE_iceoryx2-userland-log-archive-orchestrator"
     ))
     .arg("--format")
     .arg("json")
-    .arg("--state-path")
-    .arg(&state_path)
-    .arg("--recorder-bin")
-    .arg(&recorder_bin)
-    .arg("--control-bin")
-    .arg(&control_bin)
-    .env("MOCK_DIR", dir.path())
     .output()
     .unwrap();
 

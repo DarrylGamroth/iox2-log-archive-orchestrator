@@ -11,6 +11,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
@@ -40,9 +42,21 @@ pub fn save(path: &Path, state: &DesiredState) -> anyhow::Result<()> {
     let encoded = toml::to_string_pretty(state).context("failed to encode desired-state TOML")?;
     let tmp_path = path.with_extension("tmp");
 
-    fs::write(&tmp_path, encoded).with_context(|| {
+    let mut tmp_file = File::create(&tmp_path).with_context(|| {
+        format!(
+            "failed to create temp desired-state file {}",
+            tmp_path.display()
+        )
+    })?;
+    tmp_file.write_all(encoded.as_bytes()).with_context(|| {
         format!(
             "failed to write temp desired-state file {}",
+            tmp_path.display()
+        )
+    })?;
+    tmp_file.sync_all().with_context(|| {
+        format!(
+            "failed to fsync temp desired-state file {}",
             tmp_path.display()
         )
     })?;
@@ -52,6 +66,26 @@ pub fn save(path: &Path, state: &DesiredState) -> anyhow::Result<()> {
             path.display()
         )
     })?;
+    let final_file = File::open(path).with_context(|| {
+        format!(
+            "failed to open desired-state file for fsync {}",
+            path.display()
+        )
+    })?;
+    final_file
+        .sync_all()
+        .with_context(|| format!("failed to fsync desired-state file {}", path.display()))?;
+    if let Some(parent) = path.parent() {
+        let parent_dir = File::open(parent).with_context(|| {
+            format!("failed to open state parent directory {}", parent.display())
+        })?;
+        parent_dir.sync_all().with_context(|| {
+            format!(
+                "failed to fsync state parent directory {}",
+                parent.display()
+            )
+        })?;
+    }
 
     Ok(())
 }
@@ -82,6 +116,9 @@ mod tests {
             "My/Camera/Service".to_string(),
             ServiceSpec {
                 enabled: true,
+                paused: false,
+                instance: "default".to_string(),
+                generation: 1,
                 storage_path: "/tmp/storage".to_string(),
                 metadata_log_path: "/tmp/metadata".to_string(),
                 profile: Default::default(),
