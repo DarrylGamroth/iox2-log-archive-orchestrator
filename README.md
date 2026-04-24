@@ -119,6 +119,19 @@ Key fields:
 - `services.<service>.mode`
 - `services.<service>.cycle_time_ms`
 - `services.<service>.flush_interval_ms`
+- `services.<service>.max_disk_bytes`
+- `services.<service>.async_io_backend`
+- `services.<service>.io_uring_queue_depth`
+- `services.<service>.io_submit_batch_max`
+- `services.<service>.io_cqe_batch_max`
+- `services.<service>.io_uring_register_files`
+- `services.<service>.checksum_mode`
+- `services.<service>.out_of_space_policy`
+- `services.<service>.metadata_log_roll_bytes`
+- `services.<service>.metadata_log_max_bytes`
+
+All production tuning fields are optional. If omitted, `iox2-log-recorder`
+uses the defaults selected by `profile`.
 
 ## Lifecycle Semantics
 - `enable`: set intent enabled with service configuration and reconcile immediately.
@@ -157,7 +170,8 @@ Supported env variables:
 
 ## Notes
 - V1 remains single-host.
-- Pattern-specific orchestration beyond pub/sub recorder workers is deferred.
+- Pub/sub recorder workers are the active supported transport. The retired core
+  `Log` messaging pattern is intentionally not orchestrated.
 - Deferred decisions are documented in `docs/log-archive-orchestrator-plan.md`.
 
 ## Traceability

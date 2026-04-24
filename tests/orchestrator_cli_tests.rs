@@ -397,6 +397,16 @@ fn periodic_reconcile_starts_enabled_service() {
             mode: PersistenceMode::Async,
             cycle_time_ms: 10,
             flush_interval_ms: 100,
+            max_disk_bytes: None,
+            async_io_backend: None,
+            io_uring_queue_depth: None,
+            io_submit_batch_max: None,
+            io_cqe_batch_max: None,
+            io_uring_register_files: None,
+            checksum_mode: None,
+            out_of_space_policy: None,
+            metadata_log_roll_bytes: None,
+            metadata_log_max_bytes: None,
         },
     );
     save(&state_path, &state).unwrap();

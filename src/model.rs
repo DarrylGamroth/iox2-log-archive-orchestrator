@@ -60,6 +60,54 @@ impl PersistenceMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AsyncIoBackend {
+    IoUringPreferred,
+    IoUringRequired,
+    Blocking,
+}
+
+impl AsyncIoBackend {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::IoUringPreferred => "io-uring-preferred",
+            Self::IoUringRequired => "io-uring-required",
+            Self::Blocking => "blocking",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChecksumMode {
+    None,
+    Crc32c,
+}
+
+impl ChecksumMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Crc32c => "crc32c",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum OutOfSpacePolicy {
+    FailWriter,
+}
+
+impl OutOfSpacePolicy {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FailWriter => "fail-writer",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ServiceSpec {
     pub enabled: bool,
@@ -79,6 +127,26 @@ pub struct ServiceSpec {
     pub cycle_time_ms: u64,
     #[serde(default = "default_flush_interval_ms")]
     pub flush_interval_ms: u64,
+    #[serde(default)]
+    pub max_disk_bytes: Option<u64>,
+    #[serde(default)]
+    pub async_io_backend: Option<AsyncIoBackend>,
+    #[serde(default)]
+    pub io_uring_queue_depth: Option<u32>,
+    #[serde(default)]
+    pub io_submit_batch_max: Option<u32>,
+    #[serde(default)]
+    pub io_cqe_batch_max: Option<u32>,
+    #[serde(default)]
+    pub io_uring_register_files: Option<bool>,
+    #[serde(default)]
+    pub checksum_mode: Option<ChecksumMode>,
+    #[serde(default)]
+    pub out_of_space_policy: Option<OutOfSpacePolicy>,
+    #[serde(default)]
+    pub metadata_log_roll_bytes: Option<u64>,
+    #[serde(default)]
+    pub metadata_log_max_bytes: Option<u64>,
 }
 
 const fn default_cycle_time_ms() -> u64 {
@@ -119,6 +187,15 @@ impl ServiceSpec {
         }
         if self.cycle_time_ms == 0 {
             anyhow::bail!("cycle_time_ms for service '{}' must be > 0", service)
+        }
+        if self.io_uring_queue_depth == Some(0) {
+            anyhow::bail!("io_uring_queue_depth for service '{}' must be > 0", service)
+        }
+        if self.io_submit_batch_max == Some(0) {
+            anyhow::bail!("io_submit_batch_max for service '{}' must be > 0", service)
+        }
+        if self.io_cqe_batch_max == Some(0) {
+            anyhow::bail!("io_cqe_batch_max for service '{}' must be > 0", service)
         }
         Ok(())
     }
@@ -207,6 +284,12 @@ impl RetryTracker {
             last_error: None,
             last_heartbeat_at: None,
         }
+    }
+}
+
+impl Default for RetryTracker {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

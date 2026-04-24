@@ -12,7 +12,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{PersistenceMode, RecorderProfile, ServiceHealth};
+use crate::model::{
+    AsyncIoBackend, ChecksumMode, OutOfSpacePolicy, PersistenceMode, RecorderProfile, ServiceHealth,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestEnvelope {
@@ -51,6 +53,16 @@ pub struct EnableRequest {
     pub mode: PersistenceMode,
     pub cycle_time_ms: u64,
     pub flush_interval_ms: u64,
+    pub max_disk_bytes: Option<u64>,
+    pub async_io_backend: Option<AsyncIoBackend>,
+    pub io_uring_queue_depth: Option<u32>,
+    pub io_submit_batch_max: Option<u32>,
+    pub io_cqe_batch_max: Option<u32>,
+    pub io_uring_register_files: Option<bool>,
+    pub checksum_mode: Option<ChecksumMode>,
+    pub out_of_space_policy: Option<OutOfSpacePolicy>,
+    pub metadata_log_roll_bytes: Option<u64>,
+    pub metadata_log_max_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +74,7 @@ pub struct ResponseEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum ResponsePayload {
-    Ok(CommandResponse),
+    Ok(Box<CommandResponse>),
     Error(ErrorPayload),
 }
 

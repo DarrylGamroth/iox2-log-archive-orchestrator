@@ -10,7 +10,8 @@ repository = "https://github.com/DarrylGamroth/iceoryx2-log-archive-orchestrator
 [dependencies]
 anyhow = "1.0.86"
 clap = { version = "4.5.4", features = ["derive"] }
-iceoryx2 = { path = "../iceoryx2/iceoryx2" }
+# Pinned to upstream while the archive stack validates against a stable external baseline.
+iceoryx2 = { git = "https://github.com/eclipse-iceoryx/iceoryx2", rev = "3107941ba2a40f2897c395289447d0f93664ad8c" }
 serde = { version = "1.0", features = ["derive", "std"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_yaml = "0.9"

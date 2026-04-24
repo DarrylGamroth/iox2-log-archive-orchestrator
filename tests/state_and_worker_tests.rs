@@ -11,7 +11,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use iceoryx2_userland_log_archive_orchestrator::model::{
-    DesiredState, PersistenceMode, RecorderProfile, ServiceSpec,
+    AsyncIoBackend, ChecksumMode, DesiredState, OutOfSpacePolicy, PersistenceMode, RecorderProfile,
+    ServiceSpec,
 };
 use iceoryx2_userland_log_archive_orchestrator::state::{load_or_default, save};
 use iceoryx2_userland_log_archive_orchestrator::worker::recorder_args;
@@ -35,6 +36,16 @@ fn desired_state_roundtrip_preserves_service_spec() {
             mode: PersistenceMode::Async,
             cycle_time_ms: 5,
             flush_interval_ms: 50,
+            max_disk_bytes: None,
+            async_io_backend: None,
+            io_uring_queue_depth: None,
+            io_submit_batch_max: None,
+            io_cqe_batch_max: None,
+            io_uring_register_files: None,
+            checksum_mode: None,
+            out_of_space_policy: None,
+            metadata_log_roll_bytes: None,
+            metadata_log_max_bytes: None,
         },
     );
 
@@ -57,6 +68,16 @@ fn recorder_args_include_required_fields() {
         mode: PersistenceMode::Async,
         cycle_time_ms: 10,
         flush_interval_ms: 100,
+        max_disk_bytes: Some(1024 * 1024),
+        async_io_backend: Some(AsyncIoBackend::Blocking),
+        io_uring_queue_depth: Some(64),
+        io_submit_batch_max: Some(16),
+        io_cqe_batch_max: Some(32),
+        io_uring_register_files: Some(false),
+        checksum_mode: Some(ChecksumMode::Crc32c),
+        out_of_space_policy: Some(OutOfSpacePolicy::FailWriter),
+        metadata_log_roll_bytes: Some(1024 * 1024),
+        metadata_log_max_bytes: Some(16 * 1024 * 1024),
     };
 
     let args = recorder_args("A/B/C", &spec);
@@ -65,4 +86,9 @@ fn recorder_args_include_required_fields() {
     assert!(args.contains(&"A/B/C".to_string()));
     assert!(args.contains(&"--storage-path".to_string()));
     assert!(args.contains(&"--metadata-log-path".to_string()));
+    assert!(args.contains(&"--async-io-backend".to_string()));
+    assert!(args.contains(&"blocking".to_string()));
+    assert!(args.contains(&"--io-uring-register-files".to_string()));
+    assert!(args.contains(&"false".to_string()));
+    assert!(args.contains(&"--metadata-log-roll-bytes".to_string()));
 }

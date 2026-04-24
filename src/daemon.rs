@@ -133,7 +133,7 @@ impl<R: Runner> Daemon<R> {
         active_request: ActiveRequest<ipc::Service, [u8], (), [u8], ()>,
     ) -> Result<(), CommandError> {
         let request_buf = active_request.payload();
-        let request: RequestEnvelope = serde_json::from_slice(&request_buf)
+        let request: RequestEnvelope = serde_json::from_slice(request_buf)
             .context("failed to parse orchestrator control request envelope")
             .map_err(CommandError::Internal)?;
 
@@ -152,7 +152,7 @@ impl<R: Runner> Daemon<R> {
             match self.handle_request(request.command) {
                 Ok(payload) => ResponseEnvelope {
                     version: CONTROL_API_VERSION,
-                    response: ResponsePayload::Ok(payload),
+                    response: ResponsePayload::Ok(Box::new(payload)),
                 },
                 Err(error) => ResponseEnvelope {
                     version: CONTROL_API_VERSION,
@@ -229,6 +229,16 @@ impl<R: Runner> Daemon<R> {
             mode: req.mode,
             cycle_time_ms: req.cycle_time_ms,
             flush_interval_ms: req.flush_interval_ms,
+            max_disk_bytes: req.max_disk_bytes,
+            async_io_backend: req.async_io_backend,
+            io_uring_queue_depth: req.io_uring_queue_depth,
+            io_submit_batch_max: req.io_submit_batch_max,
+            io_cqe_batch_max: req.io_cqe_batch_max,
+            io_uring_register_files: req.io_uring_register_files,
+            checksum_mode: req.checksum_mode,
+            out_of_space_policy: req.out_of_space_policy,
+            metadata_log_roll_bytes: req.metadata_log_roll_bytes,
+            metadata_log_max_bytes: req.metadata_log_max_bytes,
         };
 
         let changed = if let Some(old) = existing {
@@ -417,10 +427,7 @@ impl<R: Runner> Daemon<R> {
             .control
             .status(service)
             .map_err(CommandError::Internal)?;
-        let tracker = self
-            .retry
-            .entry(service.to_string())
-            .or_insert_with(RetryTracker::new);
+        let tracker = self.retry.entry(service.to_string()).or_default();
 
         if live.available {
             tracker.last_heartbeat_at = Some(now);
@@ -466,10 +473,7 @@ impl<R: Runner> Daemon<R> {
                 .control
                 .status(service)
                 .map_err(CommandError::Internal)?;
-            let tracker = self
-                .retry
-                .entry(service.clone())
-                .or_insert_with(RetryTracker::new);
+            let tracker = self.retry.entry(service.clone()).or_default();
 
             if live.available {
                 tracker.last_heartbeat_at = Some(now);

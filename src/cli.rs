@@ -17,7 +17,9 @@ use clap::Parser;
 use clap::Subcommand;
 
 use crate::format::Format;
-use crate::model::{PersistenceMode, RecorderProfile};
+use crate::model::{
+    AsyncIoBackend, ChecksumMode, OutOfSpacePolicy, PersistenceMode, RecorderProfile,
+};
 
 #[derive(Parser)]
 #[command(
@@ -117,4 +119,34 @@ pub struct EnableOptions {
 
     #[clap(long, default_value = "100")]
     pub flush_interval_ms: u64,
+
+    #[clap(long)]
+    pub max_disk_bytes: Option<u64>,
+
+    #[clap(long, value_enum)]
+    pub async_io_backend: Option<AsyncIoBackend>,
+
+    #[clap(long)]
+    pub io_uring_queue_depth: Option<u32>,
+
+    #[clap(long)]
+    pub io_submit_batch_max: Option<u32>,
+
+    #[clap(long)]
+    pub io_cqe_batch_max: Option<u32>,
+
+    #[clap(long)]
+    pub io_uring_register_files: Option<bool>,
+
+    #[clap(long, value_enum)]
+    pub checksum_mode: Option<ChecksumMode>,
+
+    #[clap(long, value_enum)]
+    pub out_of_space_policy: Option<OutOfSpacePolicy>,
+
+    #[clap(long)]
+    pub metadata_log_roll_bytes: Option<u64>,
+
+    #[clap(long)]
+    pub metadata_log_max_bytes: Option<u64>,
 }
