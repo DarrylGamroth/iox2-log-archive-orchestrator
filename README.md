@@ -66,7 +66,9 @@ The default coverage command writes `target/llvm-cov/lcov.info`. For an HTML
 report, run `./scripts/coverage.sh --html`.
 
 CI runs the same formatting, check, clippy, test, and coverage commands on
-pushes and pull requests to `main`.
+pushes and pull requests to `main` on Linux. macOS and Windows run portable
+library/binary smoke checks; the daemon integration tests remain Linux-only
+because their mocks use Unix shell scripts and process-control assumptions.
 
 ## Dependencies
 

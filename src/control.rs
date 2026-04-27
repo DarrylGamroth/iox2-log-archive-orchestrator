@@ -118,6 +118,7 @@ mod tests {
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
+    use std::time::Duration;
 
     use super::ControlClient;
 
@@ -133,6 +134,7 @@ mod tests {
         let mut permissions = fs::metadata(path).unwrap().permissions();
         permissions.set_mode(0o755);
         fs::set_permissions(path, permissions).unwrap();
+        std::thread::sleep(Duration::from_millis(20));
     }
 
     #[test]
