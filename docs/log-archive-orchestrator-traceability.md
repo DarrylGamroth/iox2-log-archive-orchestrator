@@ -38,3 +38,4 @@ This matrix maps baseline `ORCH-*` requirements and Phase 6 freeze decisions `DF
 - Deferred `DD-*` decisions remain intentionally out of V1 scope.
 - High-load soak testing and supervisor orchestration tests remain post-Phase-6 hardening work.
 - CI and local coverage are provided by `.github/workflows/ci.yml` and `scripts/coverage.sh`.
+- Historical planning detail is kept in `docs/design/log-archive-orchestrator-plan.md`.

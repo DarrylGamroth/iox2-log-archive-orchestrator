@@ -248,7 +248,10 @@ Supported env variables:
 - V1 remains single-host.
 - Pub/sub recorder workers are the active supported transport. The retired core
   `Log` messaging pattern is intentionally not orchestrated.
-- Deferred decisions are documented in `docs/log-archive-orchestrator-plan.md`.
+- Deferred out-of-scope areas are authn/authz, multi-host orchestration,
+  in-process production workers, and advanced admission control/quotas.
+- Historical planning/design docs are kept under `docs/design/` rather than in
+  the user-level docs path.
 
 ## Traceability
 - `docs/log-archive-orchestrator-traceability.md`
