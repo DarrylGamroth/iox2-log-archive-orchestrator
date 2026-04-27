@@ -72,3 +72,42 @@ impl CommandError {
             .unwrap_or_else(|_| self.code().to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::anyhow;
+
+    use crate::format::Format;
+
+    use super::CommandError;
+
+    #[test]
+    fn command_errors_have_stable_codes_exit_codes_and_payloads() {
+        let cases = [
+            (
+                CommandError::InvalidInput("bad input".to_string()),
+                "InvalidInput",
+                2,
+            ),
+            (
+                CommandError::NotAvailable("daemon missing".to_string()),
+                "NotAvailable",
+                3,
+            ),
+            (
+                CommandError::Internal(anyhow!("disk failed")),
+                "Internal",
+                1,
+            ),
+        ];
+
+        for (error, code, exit_code) in cases {
+            assert_eq!(error.code(), code);
+            assert_eq!(error.exit_code(), exit_code);
+            let payload = error.to_payload();
+            assert_eq!(payload.error_code, code);
+            assert_eq!(payload.exit_code, exit_code);
+            assert!(error.to_formatted_error(Format::JSON).contains(code));
+        }
+    }
+}

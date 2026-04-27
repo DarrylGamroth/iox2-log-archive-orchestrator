@@ -33,3 +33,37 @@ impl Format {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde::Serialize;
+
+    use super::Format;
+
+    #[derive(Serialize)]
+    struct Payload {
+        service: &'static str,
+        enabled: bool,
+    }
+
+    #[test]
+    fn all_output_formats_serialize_payloads() {
+        let payload = Payload {
+            service: "Camera/A",
+            enabled: true,
+        };
+
+        assert!(Format::RON
+            .as_string(&payload)
+            .unwrap()
+            .contains("Camera/A"));
+        assert!(Format::JSON
+            .as_string(&payload)
+            .unwrap()
+            .contains("\"enabled\": true"));
+        assert!(Format::YAML
+            .as_string(&payload)
+            .unwrap()
+            .contains("service: Camera/A"));
+    }
+}

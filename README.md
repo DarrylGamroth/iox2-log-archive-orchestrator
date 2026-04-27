@@ -1,5 +1,8 @@
 # Log Archive Orchestrator
 
+[![CI](https://github.com/DarrylGamroth/iox2-log-archive-orchestrator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DarrylGamroth/iox2-log-archive-orchestrator/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/DarrylGamroth/iox2-log-archive-orchestrator/branch/main/graph/badge.svg)](https://codecov.io/gh/DarrylGamroth/iox2-log-archive-orchestrator)
+
 `iceoryx2-userland-log-archive-orchestrator` is a userland control-plane daemon for managing many `iox2-log-recorder` workers.
 
 ## Model
@@ -40,7 +43,43 @@ Binary: `iox2-log-orchestrator`
 
 ```bash
 cargo build
+cargo test --all-targets --no-fail-fast
 ```
+
+Release-gate checks:
+
+```bash
+cargo fmt --all --check
+cargo check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets --no-fail-fast
+```
+
+Local coverage uses `cargo-llvm-cov`:
+
+```bash
+cargo install cargo-llvm-cov
+./scripts/coverage.sh
+```
+
+The default coverage command writes `target/llvm-cov/lcov.info`. For an HTML
+report, run `./scripts/coverage.sh --html`.
+
+CI runs the same formatting, check, clippy, test, and coverage commands on
+pushes and pull requests to `main`.
+
+## Dependencies
+
+Runtime expects these binaries to be available unless overridden:
+
+```text
+iox2-log-recorder
+iox2-log-control
+```
+
+Both are provided by the sibling `iox2-log-archive` repository. The
+orchestrator treats them as external process/control contracts and does not
+link the archive core into the daemon.
 
 ## Quickstart
 
@@ -50,7 +89,7 @@ Terminal 1:
 STATE=/tmp/iox2-log-orchestrator/state.toml
 CONTROL_SERVICE=iox2/log/archive/orchestrator/control
 
-cargo run -- \
+cargo run --bin iox2-log-orchestrator -- \
   --format JSON \
   --state-path "$STATE" \
   --control-service "$CONTROL_SERVICE" \
@@ -64,7 +103,7 @@ STATE=/tmp/iox2-log-orchestrator/state.toml
 CONTROL_SERVICE=iox2/log/archive/orchestrator/control
 SERVICE=My/Camera/Service
 
-cargo run -- \
+cargo run --bin iox2-log-orchestrator -- \
   --format JSON \
   --state-path "$STATE" \
   --control-service "$CONTROL_SERVICE" \
@@ -74,19 +113,19 @@ cargo run -- \
   --storage-path /tmp/iox2-archive/storage \
   --metadata-log-path /tmp/iox2-archive/metadata
 
-cargo run -- \
+cargo run --bin iox2-log-orchestrator -- \
   --format JSON \
   --state-path "$STATE" \
   --control-service "$CONTROL_SERVICE" \
   status --service "$SERVICE"
 
-cargo run -- \
+cargo run --bin iox2-log-orchestrator -- \
   --format JSON \
   --state-path "$STATE" \
   --control-service "$CONTROL_SERVICE" \
   pause --service "$SERVICE"
 
-cargo run -- \
+cargo run --bin iox2-log-orchestrator -- \
   --format JSON \
   --state-path "$STATE" \
   --control-service "$CONTROL_SERVICE" \
@@ -96,7 +135,7 @@ cargo run -- \
 Shutdown:
 
 ```bash
-cargo run -- \
+cargo run --bin iox2-log-orchestrator -- \
   --format JSON \
   --state-path "$STATE" \
   --control-service "$CONTROL_SERVICE" \
@@ -106,6 +145,33 @@ cargo run -- \
 ## State Schema
 Default file path:
 - `$HOME/.config/iox2/log-orchestrator/state.toml`
+
+Example:
+
+```toml
+version = 1
+
+[services."My/Camera/Service"]
+enabled = true
+paused = false
+instance = "default"
+generation = 1
+storage_path = "/var/lib/iox2-log-archive/storage/MyCamera"
+metadata_log_path = "/var/lib/iox2-log-archive/metadata/MyCamera"
+profile = "throughput"
+mode = "async"
+cycle_time_ms = 10
+flush_interval_ms = 100
+async_io_backend = "io-uring-preferred"
+io_uring_queue_depth = 256
+io_submit_batch_max = 256
+io_cqe_batch_max = 512
+io_uring_register_files = true
+checksum_mode = "crc32c"
+out_of_space_policy = "fail-writer"
+metadata_log_roll_bytes = 67108864
+metadata_log_max_bytes = 1073741824
+```
 
 Key fields:
 - `version`
@@ -151,6 +217,16 @@ uses the defaults selected by `profile`.
 - degraded flag
 - next retry delay
 - Restart policy is bounded exponential backoff with jitter and degraded transition on retry-window exhaustion.
+
+## Operational Runbook
+
+- Start one daemon per host with a durable `--state-path`.
+- Use `enable` to persist desired recorder configuration and start/reconcile immediately.
+- Use `pause` for temporary runtime gating while keeping desired intent.
+- Use `disable` to clear desired intent and request worker stop.
+- Use `stop` only for immediate runtime stop; the next reconcile may restart the worker if intent is still enabled and not paused.
+- Use `daemon-status`, `list`, and `status --service <name>` for health checks.
+- If a service becomes degraded, inspect `last_error`, fix the external recorder/control/storage issue, then use `resume`, `start`, or `reconcile` as appropriate.
 
 ## Configuration Precedence
 `CLI > env > config file > defaults`

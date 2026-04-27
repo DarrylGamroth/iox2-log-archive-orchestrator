@@ -110,3 +110,97 @@ impl ControlClient {
         }
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::fs;
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::ControlClient;
+
+    fn write_script(path: &Path, body: &str) {
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.write_all(body.as_bytes()).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    fn status_success_parses_control_payload() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("control.sh");
+        write_script(
+            &script,
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+echo '{"is_paused":true,"dropped_while_paused":3,"paused_since_ns":123,"committed_records":42,"payload_bytes_committed":4096}'
+"#,
+        );
+
+        let client = ControlClient {
+            control_bin: script.to_string_lossy().to_string(),
+            timeout_ms: 7,
+        };
+        let status = client.status("Camera/A").unwrap();
+        assert!(status.available);
+        assert_eq!(status.is_paused, Some(true));
+        assert_eq!(status.dropped_while_paused, Some(3));
+        assert_eq!(status.paused_since_ns, Some(123));
+        assert_eq!(status.committed_records, Some(42));
+        assert_eq!(status.payload_bytes_committed, Some(4096));
+    }
+
+    #[test]
+    fn status_failure_prefers_structured_error_payload() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("control.sh");
+        write_script(
+            &script,
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+echo '{"message":"service unavailable"}' >&2
+exit 3
+"#,
+        );
+
+        let client = ControlClient {
+            control_bin: script.to_string_lossy().to_string(),
+            timeout_ms: 7,
+        };
+        let status = client.status("Camera/A").unwrap();
+        assert!(!status.available);
+        assert_eq!(status.message.as_deref(), Some("service unavailable"));
+    }
+
+    #[test]
+    fn stop_failure_falls_back_to_plain_stderr() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("control.sh");
+        write_script(
+            &script,
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+echo 'plain stop failure' >&2
+exit 3
+"#,
+        );
+
+        let client = ControlClient {
+            control_bin: script.to_string_lossy().to_string(),
+            timeout_ms: 7,
+        };
+        let status = client.stop("Camera/A").unwrap();
+        assert!(!status.available);
+        assert_eq!(status.message.as_deref(), Some("plain stop failure"));
+    }
+}

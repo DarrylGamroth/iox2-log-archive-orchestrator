@@ -1,10 +1,10 @@
 # Log Archive Orchestrator Plan
 
 ## Status
-- In progress
-- Last updated: 2026-02-12
+- Implemented
+- Last updated: 2026-04-27
 - Repository: `iox2-log-archive-orchestrator` (standalone extraction)
-- Base compatibility target: `iceoryx2` upstream `main` / HEAD
+- Base compatibility target: `iceoryx2` upstream commit `3107941ba2a40f2897c395289447d0f93664ad8c`
 
 ## Objective
 Deliver a thin overlay orchestrator for `log-archive` that manages many per-service recorder daemons while keeping `log-archive` core hot paths policy-free.
@@ -153,3 +153,4 @@ The key words `MUST`, `SHOULD`, `MAY` are to be interpreted as described in RFC 
 - Periodic reconcile loop and bounded retry/backoff with degraded-state transition are implemented in daemon runtime.
 - Health/status now exposes heartbeat age, last error, last transition reason, restart attempts, and degraded state.
 - Configuration precedence is implemented as `CLI > env > config file > defaults`.
+- CI and local coverage are implemented with `cargo-llvm-cov`; README badges point at the `main` branch CI and Codecov reports.

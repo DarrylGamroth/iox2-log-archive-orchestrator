@@ -5,7 +5,11 @@ edition = "2021"
 rust-version = "1.83"
 description = "Multi-stream recorder orchestration overlay for iceoryx2 log-archive"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DarrylGamroth/iceoryx2-log-archive-orchestrator"
+repository = "https://github.com/DarrylGamroth/iox2-log-archive-orchestrator"
+
+[[bin]]
+name = "iox2-log-orchestrator"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.86"

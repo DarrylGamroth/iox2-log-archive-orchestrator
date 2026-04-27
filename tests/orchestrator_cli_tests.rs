@@ -173,23 +173,21 @@ fn run_orchestrator(
     mock_dir: &Path,
     args: &[&str],
 ) -> Output {
-    Command::new(env!(
-        "CARGO_BIN_EXE_iceoryx2-userland-log-archive-orchestrator"
-    ))
-    .arg("--format")
-    .arg("json")
-    .arg("--state-path")
-    .arg(state_path)
-    .arg("--control-service")
-    .arg(control_service)
-    .arg("--recorder-bin")
-    .arg(recorder_bin)
-    .arg("--control-bin")
-    .arg(control_bin)
-    .args(args)
-    .env("MOCK_DIR", mock_dir)
-    .output()
-    .unwrap()
+    Command::new(env!("CARGO_BIN_EXE_iox2-log-orchestrator"))
+        .arg("--format")
+        .arg("json")
+        .arg("--state-path")
+        .arg(state_path)
+        .arg("--control-service")
+        .arg(control_service)
+        .arg("--recorder-bin")
+        .arg(recorder_bin)
+        .arg("--control-bin")
+        .arg(control_bin)
+        .args(args)
+        .env("MOCK_DIR", mock_dir)
+        .output()
+        .unwrap()
 }
 
 fn start_daemon(
@@ -200,9 +198,7 @@ fn start_daemon(
     mock_dir: &Path,
     extra_args: &[&str],
 ) -> DaemonGuard {
-    let mut command = Command::new(env!(
-        "CARGO_BIN_EXE_iceoryx2-userland-log-archive-orchestrator"
-    ));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_iox2-log-orchestrator"));
     command
         .arg("--format")
         .arg("json")
@@ -509,13 +505,11 @@ fn service_enters_degraded_after_retry_window() {
 
 #[test]
 fn missing_action_returns_deterministic_invalid_input_error() {
-    let output = Command::new(env!(
-        "CARGO_BIN_EXE_iceoryx2-userland-log-archive-orchestrator"
-    ))
-    .arg("--format")
-    .arg("json")
-    .output()
-    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_iox2-log-orchestrator"))
+        .arg("--format")
+        .arg("json")
+        .output()
+        .unwrap();
 
     assert_eq!(output.status.code(), Some(2));
     let error: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();

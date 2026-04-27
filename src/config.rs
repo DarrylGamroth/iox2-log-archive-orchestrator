@@ -248,11 +248,123 @@ fn default_state_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_u64;
+    use std::env;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    use crate::cli::Cli;
+    use crate::format::Format;
+
+    use super::{resolve, resolve_u64};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn empty_cli() -> Cli {
+        Cli {
+            action: None,
+            format: Format::JSON,
+            state_path: None,
+            config_path: None,
+            control_service: None,
+            recorder_bin: None,
+            control_bin: None,
+            control_timeout_ms: None,
+            reconcile_interval_ms: None,
+            backoff_initial_ms: None,
+            backoff_factor: None,
+            backoff_max_ms: None,
+            backoff_jitter_percent: None,
+            backoff_max_window_ms: None,
+        }
+    }
+
+    fn clear_orchestrator_env() {
+        for key in [
+            "IOX2_LOG_ORCH_STATE_PATH",
+            "IOX2_LOG_ORCH_CONTROL_SERVICE",
+            "IOX2_LOG_ORCH_RECORDER_BIN",
+            "IOX2_LOG_ORCH_CONTROL_BIN",
+            "IOX2_LOG_ORCH_CONTROL_TIMEOUT_MS",
+            "IOX2_LOG_ORCH_RECONCILE_INTERVAL_MS",
+            "IOX2_LOG_ORCH_BACKOFF_INITIAL_MS",
+            "IOX2_LOG_ORCH_BACKOFF_FACTOR",
+            "IOX2_LOG_ORCH_BACKOFF_MAX_MS",
+            "IOX2_LOG_ORCH_BACKOFF_JITTER_PERCENT",
+            "IOX2_LOG_ORCH_BACKOFF_MAX_WINDOW_MS",
+        ] {
+            env::remove_var(key);
+        }
+    }
 
     #[test]
     fn cli_overrides_defaults() {
         let value = resolve_u64(Some(7), "DOES_NOT_EXIST", None, 42).unwrap();
         assert_eq!(value, 7);
+    }
+
+    #[test]
+    fn file_env_and_cli_precedence_is_deterministic() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_orchestrator_env();
+
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("orchestrator.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+state_path = "/tmp/from-file/state.toml"
+control_service = "from/file/control"
+recorder_bin = "recorder-from-file"
+control_bin = "control-from-file"
+control_timeout_ms = 111
+reconcile_interval_ms = 222
+backoff_initial_ms = 333
+backoff_factor = 1.5
+backoff_max_ms = 444
+backoff_jitter_percent = 7
+backoff_max_window_ms = 555
+"#,
+        )
+        .unwrap();
+
+        env::set_var("IOX2_LOG_ORCH_CONTROL_SERVICE", "from/env/control");
+        env::set_var("IOX2_LOG_ORCH_CONTROL_TIMEOUT_MS", "999");
+        env::set_var("IOX2_LOG_ORCH_BACKOFF_FACTOR", "3.0");
+
+        let mut cli = empty_cli();
+        cli.config_path = Some(config_path);
+        cli.state_path = Some(PathBuf::from("/tmp/from-cli/state.toml"));
+        cli.control_timeout_ms = Some(42);
+
+        let resolved = resolve(&cli).unwrap();
+        assert_eq!(
+            resolved.state_path,
+            PathBuf::from("/tmp/from-cli/state.toml")
+        );
+        assert_eq!(resolved.control_service, "from/env/control");
+        assert_eq!(resolved.recorder_bin, "recorder-from-file");
+        assert_eq!(resolved.control_bin, "control-from-file");
+        assert_eq!(resolved.control_timeout_ms, 42);
+        assert_eq!(resolved.reconcile_interval_ms, 222);
+        assert_eq!(resolved.backoff.initial_ms, 333);
+        assert_eq!(resolved.backoff.factor, 3.0);
+        assert_eq!(resolved.backoff.max_ms, 444);
+        assert_eq!(resolved.backoff.jitter_percent, 7);
+        assert_eq!(resolved.backoff.max_window_ms, 555);
+
+        clear_orchestrator_env();
+    }
+
+    #[test]
+    fn invalid_numeric_environment_values_are_reported() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_orchestrator_env();
+
+        env::set_var("IOX2_LOG_ORCH_CONTROL_TIMEOUT_MS", "not-a-number");
+        let error = resolve(&empty_cli()).unwrap_err().to_string();
+        assert!(error.contains("IOX2_LOG_ORCH_CONTROL_TIMEOUT_MS"));
+        assert!(error.contains("not-a-number"));
+
+        clear_orchestrator_env();
     }
 }
